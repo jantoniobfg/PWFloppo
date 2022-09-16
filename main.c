@@ -68,10 +68,10 @@ volatile uint8_t curr_sector=0;
 volatile uint8_t last_w_sector=0;
 volatile uint16_t counter_rx=0;
 
-#define END_OF_SECTOR 240
-#define BEGIN_OF_SECTOR 255
-#define BUF_UP 220
-#define BUF_DOWN 200
+#define END_OF_SECTOR 255
+#define BEGIN_OF_SECTOR 275
+#define BUF_UP 240
+#define BUF_DOWN 220
 
 #define DATA_STEP 13
 
@@ -230,7 +230,7 @@ ISR (TCA0_OVF_vect) {
     //static uint16_t counter=0;
    // static  uint8_t selector=0;
     //uint16_t c=counter;
-    static uint8_t* prebuf_pointer=buf+1;
+    static uint8_t* prebuf_pointer=buf;
     if(state==SAVE_SECTOR){
         TCA0.SINGLE.PERBUF=((uint16_t)*(prebuf_pointer++));
         /*
@@ -266,7 +266,7 @@ ISR (TCA0_OVF_vect) {
 
             TCA0.SINGLE.CTRLA &=~TCA_SINGLE_ENABLE_bm;
             read_mode();
-            prebuf_pointer=buf+1;
+            prebuf_pointer=buf;
             state=OFF;
            // PORTB.OUTSET = PIN5_bm; //Modo leitura
             //static uint8_t* pointer1=&buf1[BUF_BIG/2];
@@ -278,7 +278,7 @@ ISR (TCA0_OVF_vect) {
         
     }
     else{
-        TCA0.SINGLE.PER=48;
+        TCA0.SINGLE.PER=64;
     }
     
     
@@ -325,7 +325,7 @@ ISR(PORTE_PORT_vect){
                 
                 
                 TCA0.SINGLE.PER = BEGIN_OF_SECTOR;
-                TCA0.SINGLE.PERBUF = *buf;
+                TCA0.SINGLE.PERBUF = BEGIN_OF_SECTOR;
                 
                 
                 TCA0.SINGLE.CTRLFSET|=TCA_SINGLE_PERBV_bm;
@@ -346,7 +346,7 @@ ISR(PORTE_PORT_vect){
             }
             else if(state==PREPARE_TO_ERASE){
                 state=ERASE_DISK;
-                TCA0.SINGLE.PER = 48;
+                TCA0.SINGLE.PER =64;
                 start_writing_timer();
                 write_mode();
                 
@@ -556,24 +556,24 @@ ISR(TCB0_INT_vect)
 {
     TCB0.INTFLAGS = TCB_CAPT_bm; /* Clear the interrupt flag */
     static uint16_t read_counter=0;
-    int16_t rx=((int16_t) TCB0.CCMP)-48;
+    int16_t rx=((int16_t) TCB0.CCMP)-64;
     static uint8_t start=0;
     if(start==1){
         if(rx<0){
             buf[read_counter++]=0;
         }
-        else if(rx>175){
-            if(rx>(END_OF_SECTOR-58)){
+        else if(rx>128){
+            if(rx>(END_OF_SECTOR-75)){
                 buf[read_counter++]=END_OF_SECTOR;
             }
-            else if(rx>(BUF_UP-58)){
+            else if(rx>(BUF_UP-75)){
                 buf[read_counter++]=BUF_UP;
             }
-            else if(rx>(BUF_DOWN-58)){
+            else if(rx>(BUF_DOWN-75)){
                 buf[read_counter++]=BUF_DOWN;
             }
             else{
-                buf[read_counter++]=175;
+                buf[read_counter++]=128;
             }
 
         }
@@ -583,7 +583,7 @@ ISR(TCB0_INT_vect)
         }
     }
     else{
-        if(rx>(BEGIN_OF_SECTOR-58))
+        if(rx>(BEGIN_OF_SECTOR-75))
             start++;
     }
     //buf[read_counter]=TCB0.CCMPL;
@@ -714,12 +714,12 @@ int main (void)
     //state=READING_SECTOR;
     
     while(PORTC.IN &(PIN7_bm));   
-    state=PREPARE_TO_ERASE;
-    USART1.TXDATAL = '1';
+    //state=PREPARE_TO_ERASE;
+    //USART1.TXDATAL = '1';
     
-    //state=READING_SECTOR;
+    state=READING_SECTOR;
     while(!(PORTC.IN &(PIN7_bm)));   
-    //TCB1_init ();
+    TCB1_init ();
     while(1);
     
 }

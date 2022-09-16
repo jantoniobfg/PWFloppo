@@ -106,46 +106,45 @@ public class Serial_arduino {
 						
 						if(i==7167) {//nao h� espaco suficiente
 							buffered_delta=true;
-							out.write((byte) (240));//sinal de fim
-							pulses_sent+=240;
-							texto.print((int) (240) + "  ");
-							texto.println((byte) (240) + " / ");
+							out.write((byte) (255));//sinal de fim
+							pulses_sent+=255;
+							texto.print((int) (255) + "  ");
+							texto.println((byte) (255) + " / ");
 							continue;
 						}
 						else {   
 							texto.print(delta+ "-->");
 							if(delta>0 && previous_delta<=0) {
-								out.write((byte) (220));//positivo
-								pulses_sent+=220;
-								texto.print( (220) + " ");
+								out.write((byte) (240));//positivo
+								pulses_sent+=240;
+								texto.print( (240) + " ");
 								i++;
 							}
 							
 							else if(delta<0 && previous_delta>=0) {
-								out.write((byte) (200));//negativo
-								pulses_sent+=200;
-								texto.print( (200)+ " ");
+								out.write((byte) (220));//negativo
+								pulses_sent+=220;
+								texto.print( (220)+ " ");
 								i++;
 							}
 							if(i==7167) {//nao h� espaco suficiente
 								buffered_delta=true;
-								out.write((byte) (240));//sinal de fim
-								pulses_sent+=240;
-								texto.print((int) (240) + "  ");
-								texto.println((byte) (240) + " / ");
+								out.write((byte) (255));//sinal de fim
+								pulses_sent+=255;
+								texto.print((int) (255) + "  ");
+								texto.println((byte) (255) + " / ");
 								continue;
 							}
-								out.write((byte) ((Math.abs(delta))+48));//entre 0 e 63
-								pulses_sent+=Math.abs(delta)+48;
+								out.write((byte) ((Math.abs(delta))+64));//entre 0 e 63
+								pulses_sent+=Math.abs(delta)+64;
 								texto.print(((int)(Math.abs(delta)))+"  ");
-								texto.println(((byte)(Math.abs(delta)+48))+" / ");
+								texto.println(((byte)(Math.abs(delta)+64))+" / ");
 								
 								if(i==7167) {//nao h� espaco suficiente
-									buffered_delta=true;
-									out.write((byte) (240));//sinal de fim
-									pulses_sent+=240;
-									texto.print((int) (240) + "  ");
-									texto.println((byte) (240) + " / ");
+									out.write((byte) (255));//sinal de fim
+									pulses_sent+=255;
+									texto.print((int) (255) + "  ");
+									texto.println((byte) (255) + " / ");
 									continue;
 								}
 								previous_delta=delta;
