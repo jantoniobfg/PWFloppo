@@ -115,9 +115,9 @@ public class Serial_arduino {
 						else {   
 							texto.print(delta+ "-->");
 							if(delta>0 && previous_delta<=0) {
-								out.write((byte) (180));//positivo
-								pulses_sent+=180;
-								texto.print( (180) + " ");
+								out.write((byte) (220));//positivo
+								pulses_sent+=220;
+								texto.print( (220) + " ");
 								i++;
 							}
 							
@@ -135,10 +135,10 @@ public class Serial_arduino {
 								texto.println((byte) (240) + " / ");
 								continue;
 							}
-								out.write((byte) ((Math.abs(delta))+32));//entre 0 e 63
-								pulses_sent+=Math.abs(delta)+32;
-								texto.print(((int)(Math.abs(delta)+32))+"  ");
-								texto.println(((byte)(Math.abs(delta)+32))+" / ");
+								out.write((byte) ((Math.abs(delta))+48));//entre 0 e 63
+								pulses_sent+=Math.abs(delta)+48;
+								texto.print(((int)(Math.abs(delta)))+"  ");
+								texto.println(((byte)(Math.abs(delta)+48))+" / ");
 								
 								if(i==7167) {//nao h� espaco suficiente
 									buffered_delta=true;

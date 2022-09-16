@@ -17,12 +17,13 @@
     OF FEES, IF ANY, THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS
     SOFTWARE.
 */
+//#define F_CPU                           (32000000UL)         /* using default clock 4MHz*/
 #define F_CPU                           (32000000UL)         /* using default clock 4MHz*/
 #define USART1_BAUD_RATE(BAUD_RATE)     ((float)(64 * F_CPU / (16 * (float)BAUD_RATE)) + 0.5)
 #define PERIOD_EXAMPLE_VALUE			(0x8C4F)
 #define PERIOD_EXAMPLE_VALUE1			(0xA0)
 #include <avr/io.h>
-//#include <util/delay.h>
+#include <util/delay.h>
 #include<avr/interrupt.h>
 
 #define SEEK_STOP 0
@@ -68,8 +69,9 @@ volatile uint8_t last_w_sector=0;
 volatile uint16_t counter_rx=0;
 
 #define END_OF_SECTOR 240
-#define BEGIN_OF_SECTOR 320
-
+#define BEGIN_OF_SECTOR 255
+#define BUF_UP 220
+#define BUF_DOWN 200
 
 #define DATA_STEP 13
 
@@ -228,11 +230,30 @@ ISR (TCA0_OVF_vect) {
     //static uint16_t counter=0;
    // static  uint8_t selector=0;
     //uint16_t c=counter;
-    static uint8_t* prebuf_pointer=buf;
+    static uint8_t* prebuf_pointer=buf+1;
     if(state==SAVE_SECTOR){
-        
+        TCA0.SINGLE.PERBUF=((uint16_t)*(prebuf_pointer++));
+        /*
+        if(*prebuf_pointer<253){
+            TCA0.SINGLE.PERBUF=((uint16_t)*(prebuf_pointer++))+64;
+        }
+        else{
+            if(*prebuf_pointer==253){
+                TCA0.SINGLE.PERBUF=BUF_UP;
+                prebuf_pointer++;
+            }
+            else if(*prebuf_pointer==254){
+                TCA0.SINGLE.PERBUF=BUF_DOWN;
+                prebuf_pointer++;
+            }
+            else{
+                TCA0.SINGLE.PERBUF=END_OF_SECTOR;
+                prebuf_pointer++;
+            }
+        }*/
+        asm volatile("sts 0x0A07,r16");
         //uint8_t* p=pointer;
-        TCA0.SINGLE.PERBUF=((uint16_t)*(prebuf_pointer++))+32;
+        
 
         //uint8_t comp1=(uint8_t)(((uint16_t)(++p))>>8);
 
@@ -245,7 +266,7 @@ ISR (TCA0_OVF_vect) {
 
             TCA0.SINGLE.CTRLA &=~TCA_SINGLE_ENABLE_bm;
             read_mode();
-            prebuf_pointer=buf;
+            prebuf_pointer=buf+1;
             state=OFF;
            // PORTB.OUTSET = PIN5_bm; //Modo leitura
             //static uint8_t* pointer1=&buf1[BUF_BIG/2];
@@ -254,10 +275,10 @@ ISR (TCA0_OVF_vect) {
             
 
         }
-        asm volatile("sts 0x0A07,r16");
+        
     }
     else{
-        TCA0.SINGLE.PER=100;
+        TCA0.SINGLE.PER=48;
     }
     
     
@@ -302,10 +323,15 @@ ISR(PORTE_PORT_vect){
         if((PORTE.IN&PIN2_bm)){//FIM DO INDEX
             if(state==SAVE_SECTOR){//gravar primeiro setor  
                 
-                write_mode();
-                TCA0.SINGLE.PER = 12;
-                TCA0.SINGLE.PERBUF = BEGIN_OF_SECTOR;
+                
+                TCA0.SINGLE.PER = BEGIN_OF_SECTOR;
+                TCA0.SINGLE.PERBUF = *buf;
+                
+                
                 TCA0.SINGLE.CTRLFSET|=TCA_SINGLE_PERBV_bm;
+                write_mode();
+                //_delay_us(4);
+                
                 start_writing_timer();
                 
 
@@ -320,7 +346,7 @@ ISR(PORTE_PORT_vect){
             }
             else if(state==PREPARE_TO_ERASE){
                 state=ERASE_DISK;
-                TCA0.SINGLE.PER = 100;
+                TCA0.SINGLE.PER = 48;
                 start_writing_timer();
                 write_mode();
                 
@@ -530,23 +556,34 @@ ISR(TCB0_INT_vect)
 {
     TCB0.INTFLAGS = TCB_CAPT_bm; /* Clear the interrupt flag */
     static uint16_t read_counter=0;
-    int16_t rx=((int16_t) TCB0.CCMP)-64;
+    int16_t rx=((int16_t) TCB0.CCMP)-48;
     static uint8_t start=0;
     if(start==1){
-        if(rx>255){
-            buf[read_counter++]=255;
-            
-
-        }
-        else if(rx<0){
+        if(rx<0){
             buf[read_counter++]=0;
         }
+        else if(rx>175){
+            if(rx>(END_OF_SECTOR-58)){
+                buf[read_counter++]=END_OF_SECTOR;
+            }
+            else if(rx>(BUF_UP-58)){
+                buf[read_counter++]=BUF_UP;
+            }
+            else if(rx>(BUF_DOWN-58)){
+                buf[read_counter++]=BUF_DOWN;
+            }
+            else{
+                buf[read_counter++]=175;
+            }
+
+        }
+        
         else{
             buf[read_counter++]=(uint8_t)rx;
         }
     }
     else{
-        if(rx>220)
+        if(rx>(BEGIN_OF_SECTOR-58))
             start++;
     }
     //buf[read_counter]=TCB0.CCMPL;
@@ -559,6 +596,86 @@ ISR(TCB0_INT_vect)
     //PORTB.OUTTGL = PIN5_bm; /* Toggle PB5 GPIO */
 }
 
+static void VREF_init(void)
+{
+    VREF.DAC0REF = VREF_REFSEL_2V048_gc /* Select the 2.048V Internal Voltage Reference for DAC */
+                 | VREF_ALWAYSON_bm;    /* Set the Voltage Reference in Always On mode */
+    /* Wait VREF start-up time */
+    //_delay_us(VREF_STARTUP_TIME);
+}
+
+static void DAC0_init(void)
+{
+    /* Disable digital input buffer */
+    PORTD.PIN6CTRL &= ~PORT_ISC_gm;
+    PORTD.PIN6CTRL |= PORT_ISC_INPUT_DISABLE_gc;
+    /* Disable pull-up resistor */
+    PORTD.PIN6CTRL &= ~PORT_PULLUPEN_bm;
+    DAC0.CTRLA = DAC_ENABLE_bm          /* Enable DAC */
+               | DAC_OUTEN_bm           /* Enable output buffer */
+               | DAC_RUNSTDBY_bm;       /* Enable Run in Standby mode */
+}
+
+static void DAC0_setVal(uint16_t value)
+{
+    /* Store the two LSbs in DAC0.DATAL */
+    DAC0.DATAL = (value & 0x3) << 6;
+    /* Store the eight MSbs in DAC0.DATAH */
+    DAC0.DATAH = value >> 2;
+}
+
+void TCB1_init (void)
+{
+    /* Configure TCB in Periodic Timeout mode */
+    TCB1.CTRLB = TCB_CNTMODE_INT_gc ;
+    
+    /* Enable Capture or Timeout interrupt */
+    TCB1.INTCTRL = TCB_OVF_bm;
+    
+    ///* Enable Event Input and Event Edge*/
+    //TCB0.EVCTRL = TCB_CAPTEI_bm | TCB_EDGE_bm;
+    
+    /* Enable TCB and set CLK_PER divider to 1 (No Prescaling) */
+    TCB1.CTRLA = TCB_CLKSEL_DIV2_gc | TCB_ENABLE_bm;
+    
+    TCB1.CNT=65535-725;
+}
+
+ISR(TCB1_INT_vect){
+    TCB1.CNT=65535-725;
+   // USART1_sendString("a");
+    TCB1.INTFLAGS|=TCB_OVF_bm;
+    static uint16_t counter=0;
+    static int16_t value1=0;
+    static uint16_t pos=1;
+    uint16_t rx=buf[counter++];
+    uint8_t end_of_sector=0;
+    if(end_of_sector==0){
+        if(rx==BUF_UP){
+            pos=1;
+        }
+        else if(rx==BUF_DOWN){
+            pos=-1;
+        }
+        else if(counter==BUF_BIG||rx==END_OF_SECTOR){
+            counter=0;
+            value1=0;
+        }
+        else{
+            value1+=pos*rx;
+        }
+        
+        
+    }
+    if(value1<0){
+            value1=0;
+    }
+    if(value1>1023){
+        value1=1023;
+    }
+    DAC0_setVal((uint16_t)value1);
+        
+}
 int main (void)
 {
     
@@ -581,7 +698,9 @@ int main (void)
     move_head(SEEK_0,0);
     
     USART1_init();
-    
+    VREF_init();
+    DAC0_init();
+    //TCB1_init ();
     //
     //
     
@@ -595,9 +714,12 @@ int main (void)
     //state=READING_SECTOR;
     
     while(PORTC.IN &(PIN7_bm));   
-    //USART1.TXDATAL = '1';
-    //state=PREPARE_TO_ERASE;
-    state=READING_SECTOR;
+    state=PREPARE_TO_ERASE;
+    USART1.TXDATAL = '1';
+    
+    //state=READING_SECTOR;
+    while(!(PORTC.IN &(PIN7_bm)));   
+    //TCB1_init ();
     while(1);
     
 }
